@@ -1,0 +1,38 @@
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# PyInstaller Build & Dist output
+build/
+dist/
+
+# Sensitive Certificates & Private Keys
+*.pem
+*.key
+*.crt
+
+# Byte-compiled / optimized / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE & Editor files (PyCharm, VS Code)
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Operating System specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# App runtime outputs / Local downloads
+Webdrop_Received/
+Relay_Temp/
+webdrop_package.zip
+*.log
+
+régi kódok/
+*.spec

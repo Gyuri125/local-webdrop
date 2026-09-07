@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webdrop</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .dragover { border-color: #38bdf8 !important; background-color: #1e293b !important; scale: 1.02; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen items-center p-4 font-sans">
+
+    <!-- Hitelesítő PIN Modal -->
+    <div id="pinModal" class="hidden fixed inset-0 bg-slate-950/90 z-[200] flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-2xl p-6 shadow-2xl space-y-4">
+            <h2 id="pinModalTitle" class="text-lg font-bold text-sky-400">PIN Required</h2>
+            <p id="pinModalDesc" class="text-xs text-slate-400">Enter the 6-digit security PIN shown on the host computer to access this server.</p>
+            <input type="password" id="pinInput" maxlength="6" inputmode="numeric" placeholder="------" class="w-full text-center tracking-[0.5em] text-2xl font-mono bg-slate-800 border border-slate-700 text-white rounded-lg p-3 outline-none focus:border-sky-500 transition-all"/>
+            <p id="pinErrorText" class="text-xs text-rose-500 hidden"></p>
+            <button onclick="submitPin()" id="btnSubmitPin" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2.5 rounded-lg transition">Authenticate</button>
+        </div>
+    </div>
+
+    <!-- Média Modal -->
+    <div id="mediaModal" class="hidden fixed inset-0 bg-slate-950/95 z-[100] flex flex-col items-center justify-center p-4 backdrop-blur-sm">
+        <button onclick="closeMedia()" class="absolute top-6 right-6 bg-slate-800 text-white rounded-full h-12 w-12 font-bold border border-slate-600 hover:bg-red-600 transition shadow-lg">X</button>
+        <video id="mediaPlayer" controls class="max-w-full max-h-[85vh] hidden rounded shadow-2xl bg-black"></video>
+        <audio id="audioPlayer" controls class="w-full max-w-md hidden shadow-lg"></audio>
+    </div>
+
+    <div class="w-full max-w-md bg-slate-800 rounded-2xl shadow-xl border border-slate-700 overflow-hidden mb-8 mt-4">
+        <div class="bg-slate-900 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold text-sky-400">Webdrop</h1>
+                <p id="serverLoadText" class="text-xs text-emerald-400 font-mono mt-1">Connecting...</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <select id="langSelect" onchange="changeLanguage(this.value)" class="bg-slate-800 text-xs text-slate-300 border border-slate-700 rounded px-2 py-1 outline-none">
+                    <option value="en">EN</option>
+                    <option value="hu">HU</option>
+                    <option value="de">DE</option>
+                    <option value="ru">RU</option>
+                </select>
+                <div id="deviceNameBadge" class="bg-slate-800 px-2 py-1 rounded border border-slate-600 text-xs font-mono text-slate-300"></div>
+            </div>
+        </div>
+
+        <div class="p-6 space-y-6">
+            <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3 shadow-inner">
+                <div class="flex justify-between items-center">
+                    <h2 id="txtSendTitle" class="text-sm font-semibold text-slate-300 uppercase">Send File</h2>
+                    <select id="uploadMode" class="bg-slate-800 text-xs text-sky-400 border border-slate-600 rounded p-1 outline-none">
+                        <option value="pc" id="optPcTarget">Target: PC</option>
+                    </select>
+                </div>
+                <div id="dropZone" class="border-2 border-dashed border-slate-600 rounded-xl p-6 text-center cursor-pointer transition-all bg-slate-950/40 hover:border-sky-500">
+                    <p id="dropZoneText" class="text-sm text-slate-400">Click or <span class="text-sky-400 font-medium">drop files here</span></p>
+                    <input type="file" id="fileInput" multiple class="hidden"/>
+                </div>
+                <button id="uploadBtn" onclick="startChunkedUpload()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg hidden transition">Start Upload</button>
+                <div id="progressContainer" class="hidden space-y-2 mt-3">
+                    <div class="flex justify-between text-xs text-slate-400 font-mono"><span id="progressFileText">Uploading...</span></div>
+                    <div class="w-full bg-slate-700 rounded-full h-3"><div id="progressBar" class="bg-sky-500 h-3 rounded-full transition-all" style="width: 0%"></div></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-2 shadow-inner">
+                <h2 id="txtClipTitle" class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Live Clipboard</h2>
+                <textarea id="clipboard" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm text-slate-200 focus:outline-none focus:border-sky-500 transition-colors"></textarea>
+                <div class="flex gap-2 mt-2">
+                    <button id="btnCopyClip" onclick="copyToClip()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold text-xs py-2 rounded transition">Copy Text</button>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3 shadow-inner">
+                <h2 id="txtRecTitle" class="text-sm font-semibold text-slate-300 uppercase text-left">Network Shares</h2>
+                <div id="noFileState" class="text-sm text-slate-500 text-center py-2">No active shares.</div>
+                <div id="downloadListContainer" class="hidden flex flex-col gap-3 mt-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const I18N = {
+            en: {
+                connecting: "Connecting...",
+                send_title: "Send File",
+                target_pc: "Target: Host PC",
+                drop_hint: "Click or drop files here",
+                selected_items: "Selected: {count} items",
+                start_upload: "Start Upload",
+                uploading: "Uploading ({current}/{total}): {percent}%",
+                clip_title: "Live Clipboard",
+                copy_text: "Copy Text",
+                copied: "Copied to clipboard.",
+                rec_title: "Network Shares",
+                no_shares: "No active shares.",
+                download: "Download",
+                play: "Play",
+                music: "Audio",
+                pin_required: "PIN Required",
+                pin_desc: "Enter the 6-digit security PIN shown on the host computer to access this server.",
+                btn_auth: "Authenticate",
+                invalid_pin: "Invalid PIN code.",
+                locked_msg: "Too many failed attempts. Locked for {time}s."
+            },
+            hu: {
+                connecting: "Kapcsolódás...",
+                send_title: "Fájl Küldése",
+                target_pc: "Cél: Szerver (PC)",
+                drop_hint: "Kattints vagy húzd be a fájlt",
+                selected_items: "Kijelölve: {count} elem",
+                start_upload: "Küldés Indítása",
+                uploading: "Feltöltés ({current}/{total}): {percent}%",
+                clip_title: "Élő Vágólap",
+                copy_text: "Szöveg Másolása",
+                copied: "Vágólapra másolva.",
+                rec_title: "Hálózati Megosztások",
+                no_shares: "Nincs aktív megosztás.",
+                download: "Letöltés",
+                play: "Lejátszás",
+                music: "Zene",
+                pin_required: "PIN Szükséges",
+                pin_desc: "Add meg a fogadó gépen látható 6 jegyű PIN kódot a hozzáféréshez.",
+                btn_auth: "Hitelesítés",
+                invalid_pin: "Hibás PIN kód.",
+                locked_msg: "Túl sok hibás próbálkozás. Zárolva: {time} mp."
+            },
+            de: {
+                connecting: "Verbindung...",
+                send_title: "Datei Senden",
+                target_pc: "Ziel: Host-PC",
+                drop_hint: "Klicken oder Dateien ablegen",
+                selected_items: "Ausgewählt: {count} Elemente",
+                start_upload: "Upload Starten",
+                uploading: "Hochladen ({current}/{total}): {percent}%",
+                clip_title: "Zwischenablage",
+                copy_text: "Text Kopieren",
+                copied: "In Zwischenablage kopiert.",
+                rec_title: "Freigaben im Netzwerk",
+                no_shares: "Keine aktiven Freigaben.",
+                download: "Herunterladen",
+                play: "Abspielen",
+                music: "Audio",
+                pin_required: "PIN Erforderlich",
+                pin_desc: "Geben Sie die 6-stellige PIN des Hosts ein, um Zugriff zu erhalten.",
+                btn_auth: "Authentifizieren",
+                invalid_pin: "Ungültiger PIN-Code.",
+                locked_msg: "Zu viele Versuche. Gesperrt für {time}s."
+            },
+            ru: {
+                connecting: "Подключение...",
+                send_title: "Отправить Файл",
+                target_pc: "Цель: ПК",
+                drop_hint: "Нажмите или перетащите файлы",
+                selected_items: "Выбрано: {count} файлов",
+                start_upload: "Начать Отправку",
+                uploading: "Загрузка ({current}/{total}): {percent}%",
+                clip_title: "Буфер Обмена",
+                copy_text: "Копировать Текст",
+                copied: "Скопировано в буфер.",
+                rec_title: "Доступные Файлы",
+                no_shares: "Нет активных раздач.",
+                download: "Скачать",
+                play: "Воспроизвести",
+                music: "Аудио",
+                pin_required: "Требуется PIN",
+                pin_desc: "Введите 6-значный PIN-код с экрана компьютера для входа.",
+                btn_auth: "Авторизоваться",
+                invalid_pin: "Неверный PIN-код.",
+                locked_msg: "Слишком много попыток. Блокировка: {time} сек."
+            }
+        };
+
+        let currentLang = localStorage.getItem('webdrop_lang') || 'en';
+        let authToken = sessionStorage.getItem('webdrop_token') || '';
+
+        const UI = {};
+        ['dropZone', 'fileInput', 'uploadBtn', 'dropZoneText', 'progressContainer', 'progressBar', 'progressFileText', 'clipboard', 'serverLoadText', 'noFileState', 'downloadListContainer', 'uploadMode', 'deviceNameBadge', 'mediaModal', 'mediaPlayer', 'audioPlayer', 'pinModal', 'pinInput', 'pinErrorText', 'langSelect', 'txtSendTitle', 'optPcTarget', 'txtClipTitle', 'btnCopyClip', 'txtRecTitle', 'pinModalTitle', 'pinModalDesc', 'btnSubmitPin'].forEach(id => UI[id] = document.getElementById(id));
+
+        UI.langSelect.value = currentLang;
+
+        function tr(key, params = {}) {
+            let s = I18N[currentLang][key] || I18N['en'][key] || key;
+            for (let [k, v] of Object.entries(params)) {
+                s = s.replace(`{${k}}`, v);
+            }
+            return s;
+        }
+
+        function changeLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('webdrop_lang', lang);
+            applyTranslations();
+        }
+
+        function applyTranslations() {
+            UI.serverLoadText.innerText = tr('connecting');
+            UI.txtSendTitle.innerText = tr('send_title');
+            UI.optPcTarget.innerText = tr('target_pc');
+            UI.dropZoneText.innerHTML = tr('drop_hint');
+            UI.uploadBtn.innerText = tr('start_upload');
+            UI.txtClipTitle.innerText = tr('clip_title');
+            UI.btnCopyClip.innerText = tr('copy_text');
+            UI.txtRecTitle.innerText = tr('rec_title');
+            UI.noFileState.innerText = tr('no_shares');
+            UI.pinModalTitle.innerText = tr('pin_required');
+            UI.pinModalDesc.innerText = tr('pin_desc');
+            UI.btnSubmitPin.innerText = tr('btn_auth');
+        }
+
+        applyTranslations();
+
+        const ua = navigator.userAgent;
+        const baseName = ua.match(/iPhone|iPad|iPod/i) ? "iPhone" : ua.match(/Android/i) ? "Android" : "PC/Mac";
+        const myName = `${baseName}-${Math.floor(1000 + Math.random() * 9000)}`;
+        UI.deviceNameBadge.innerText = myName;
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => {
+            UI.dropZone.addEventListener(eName, e => { e.preventDefault(); e.stopPropagation(); });
+            document.body.addEventListener(eName, e => { e.preventDefault(); e.stopPropagation(); });
+        });
+        UI.dropZone.addEventListener('drop', e => {
+            if(e.dataTransfer.files.length) { UI.fileInput.files = e.dataTransfer.files; handleFile(); }
+        });
+        UI.dropZone.addEventListener('click', () => UI.fileInput.click());
+        UI.fileInput.addEventListener('change', handleFile);
+
+        function handleFile() {
+            if(UI.fileInput.files.length > 0) {
+                UI.dropZoneText.innerHTML = tr('selected_items', { count: UI.fileInput.files.length });
+                UI.uploadBtn.classList.remove('hidden');
+            }
+        }
+
+        async function copyToClip() {
+            try {
+                await navigator.clipboard.writeText(UI.clipboard.value);
+                alert(tr('copied'));
+            } catch (err) {
+                UI.clipboard.select();
+                document.execCommand("copy");
+                alert(tr('copied'));
+            }
+        }
+
+        function playMedia(url, type) {
+            UI.mediaModal.classList.remove('hidden');
+            if(type === 'video') {
+                UI.mediaPlayer.src = url;
+                UI.mediaPlayer.classList.remove('hidden');
+                UI.mediaPlayer.play();
+            } else {
+                UI.audioPlayer.src = url;
+                UI.audioPlayer.classList.remove('hidden');
+                UI.audioPlayer.play();
+            }
+        }
+
+        function closeMedia() {
+            UI.mediaModal.classList.add('hidden');
+            UI.mediaPlayer.pause(); UI.mediaPlayer.src = ''; UI.mediaPlayer.classList.add('hidden');
+            UI.audioPlayer.pause(); UI.audioPlayer.src = ''; UI.audioPlayer.classList.add('hidden');
+        }
+
+        async function checkPinRequirement() {
+            const res = await fetch('/pin_status');
+            const data = await res.json();
+            if(data.enabled && !authToken) {
+                UI.pinModal.classList.remove('hidden');
+            }
+        }
+
+        async function submitPin() {
+            const pin = UI.pinInput.value.trim();
+            if(!pin) return;
+
+            try {
+                const res = await fetch('/verify_pin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin: pin })
+                });
+                const data = await res.json();
+
+                if(res.ok && data.status === 'success') {
+                    authToken = data.token;
+                    sessionStorage.setItem('webdrop_token', authToken);
+                    UI.pinModal.classList.add('hidden');
+                    UI.pinErrorText.classList.add('hidden');
+                    if(ws && ws.readyState === 1) {
+                        ws.send(JSON.stringify({ event: 'authenticate', token: authToken }));
+                    }
+                } else if(data.status === 'locked') {
+                    UI.pinErrorText.innerText = tr('locked_msg', { time: data.remaining });
+                    UI.pinErrorText.classList.remove('hidden');
+                } else {
+                    UI.pinErrorText.innerText = tr('invalid_pin');
+                    UI.pinErrorText.classList.remove('hidden');
+                }
+            } catch (e) {
+                UI.pinErrorText.innerText = "Connection error.";
+                UI.pinErrorText.classList.remove('hidden');
+            }
+        }
+
+        function safeDownload(url, isRelay, cardId) {
+            window.location.href = `${url}?token=${encodeURIComponent(authToken)}`;
+            if(isRelay) setTimeout(() => { document.getElementById(cardId)?.remove(); }, 1500);
+        }
+
+        function safeStream(url, type) {
+            playMedia(`${url}?token=${encodeURIComponent(authToken)}`, type);
+        }
+
+        async function startChunkedUpload() {
+            const files = UI.fileInput.files;
+            if(!files.length) return;
+            const target = UI.uploadMode.value;
+            UI.uploadBtn.classList.add('hidden');
+            UI.progressContainer.classList.remove('hidden');
+            UI.dropZone.style.pointerEvents = 'none';
+
+            for(let f = 0; f < files.length; f++) {
+                const file = files[f];
+                const CHUNK_SIZE = 5 * 1024 * 1024;
+                const total = Math.ceil(file.size / CHUNK_SIZE);
+                let startChunk = 0;
+                try {
+                    const statRes = await fetch(`/upload_status?filename=${encodeURIComponent(file.name)}&target=${target}&token=${encodeURIComponent(authToken)}`);
+                    if(statRes.status === 401) {
+                        UI.pinModal.classList.remove('hidden');
+                        break;
+                    }
+                    const statData = await statRes.json();
+                    startChunk = statData.received_chunks || 0;
+                } catch(e) {}
+
+                for(let i = startChunk; i < total; i++) {
+                    const start = i * CHUNK_SIZE;
+                    const end = Math.min(file.size, start + CHUNK_SIZE);
+                    const fd = new FormData();
+                    fd.append("file", file.slice(start, end));
+                    fd.append("filename", file.name);
+                    fd.append("chunk_index", i);
+                    fd.append("total_chunks", total);
+                    fd.append("file_size", file.size);
+                    fd.append("target", target);
+                    fd.append("sender", myName);
+                    fd.append("token", authToken);
+
+                    try {
+                        const postRes = await fetch('/upload', { method: 'POST', body: fd });
+                        if(postRes.status === 401) {
+                            UI.pinModal.classList.remove('hidden');
+                            return;
+                        }
+                    } catch(e) {}
+                    const percent = Math.round((end / file.size) * 100);
+                    UI.progressBar.style.width = percent + '%';
+                    UI.progressFileText.innerText = tr('uploading', { current: f + 1, total: files.length, percent: percent });
+                }
+            }
+            UI.progressContainer.classList.add('hidden');
+            UI.fileInput.value = '';
+            UI.dropZoneText.innerHTML = tr('drop_hint');
+            UI.dropZone.style.pointerEvents = 'auto';
+        }
+
+        let ws;
+        function connectWS() {
+            const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${proto}//${window.location.host}/ws`);
+
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ event: 'register', name: myName, token: authToken }));
+            };
+
+            ws.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+
+                if(d.event === 'auth_required') {
+                    UI.pinModal.classList.remove('hidden');
+                }
+                else if(d.event === 'security_status') {
+                    if(!d.enabled) {
+                        UI.pinModal.classList.add('hidden');
+                    } else if(!authToken) {
+                        UI.pinModal.classList.remove('hidden');
+                    }
+                }
+                else if(d.event === 'client_list') {
+                    let opts = `<option value="pc">${tr('target_pc')}</option>`;
+                    d.clients.forEach(c => {
+                        if(c !== myName) opts += `<option value="${c}">Target: ${c}</option>`;
+                    });
+                    UI.uploadMode.innerHTML = opts;
+                }
+                else if(d.event === 'files_shared') {
+                    UI.noFileState.classList.add('hidden');
+                    UI.downloadListContainer.classList.remove('hidden');
+                    if(!d.is_relay) UI.downloadListContainer.innerHTML = '';
+
+                    d.files.forEach((file) => {
+                        const cardId = 'card_' + Math.random().toString(36).substring(2, 9);
+                        const card = document.createElement('div');
+                        card.id = cardId;
+                        card.className = "flex items-center p-3 bg-slate-800 rounded-lg border border-slate-600 gap-3 relative shadow-md";
+
+                        const badge = d.is_relay ? `<span class="absolute -top-2 -right-2 bg-purple-500 text-white text-[10px] px-2 py-0.5 rounded-full z-10 shadow border border-slate-800">${file.source}</span>` : '';
+                        const mC = file.thumbnail ? `<img src="${file.thumbnail}" class="h-14 w-14 object-cover rounded shadow-sm border border-slate-500" />` : `<div class="h-14 w-14 flex items-center justify-center bg-slate-700 rounded text-xl text-slate-300 font-mono">${file.filename.endsWith('.zip') ? 'ZIP' : 'FILE'}</div>`;
+
+                        let streamBtn = '';
+                        const fLow = file.filename.toLowerCase();
+                        if(fLow.match(/\.(mp4|webm|mkv|mov)$/)) {
+                            streamBtn = `<button onclick="safeStream('${file.url}', 'video')" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded text-xs font-bold text-white transition shadow">${tr('play')}</button>`;
+                        } else if(fLow.match(/\.(mp3|wav|ogg|flac)$/)) {
+                            streamBtn = `<button onclick="safeStream('${file.url}', 'audio')" class="bg-fuchsia-600 hover:bg-fuchsia-500 px-3 py-1.5 rounded text-xs font-bold text-white transition shadow">${tr('music')}</button>`;
+                        }
+
+                        card.innerHTML = `
+                            ${badge}${mC}
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-emerald-400 truncate">${file.filename}</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                ${streamBtn}
+                                <button onclick="safeDownload('${file.url}', ${d.is_relay}, '${cardId}')" class="bg-sky-600 hover:bg-sky-500 px-3 py-1.5 rounded text-xs font-bold text-white transition shadow">${tr('download')}</button>
+                            </div>
+                        `;
+
+                        if(d.is_relay) UI.downloadListContainer.prepend(card);
+                        else UI.downloadListContainer.appendChild(card);
+                    });
+                }
+                else if(d.event === 'file_cleared') {
+                    UI.noFileState.classList.remove('hidden');
+                    UI.downloadListContainer.classList.add('hidden');
+                    UI.downloadListContainer.innerHTML = '';
+                }
+                else if(d.event === 'clipboard' && UI.clipboard.value !== d.text) {
+                    UI.clipboard.value = d.text;
+                }
+                else if(d.event === 'server_stats') {
+                    UI.serverLoadText.innerText = `CPU: ${d.cpu}% | RAM: ${d.ram}%`;
+                }
+            };
+
+            ws.onclose = () => setTimeout(connectWS, 2000);
+        }
+
+        connectWS();
+        checkPinRequirement();
+
+        UI.clipboard.addEventListener('input', () => {
+            if(ws && ws.readyState === 1) ws.send(JSON.stringify({ event: 'clipboard', text: UI.clipboard.value }));
+        });
+    </script>
+</body>
+</html>
