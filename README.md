@@ -1,59 +1,90 @@
 # Local Webdrop
 
-Local Webdrop is a lightweight, zero-configuration local network file transfer, media streaming, and live clipboard synchronization utility. It bridges desktop environments and mobile devices across the same Local Area Network (LAN) without relying on external cloud providers, third-party servers, or internet access.
+[![Python Version](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Framework-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Security](https://img.shields.io/badge/Security-TLS%20%2F%20HTTPS-0284C7?style=flat-square)](https://github.com/)
+[![License](https://img.shields.io/badge/License-MIT-slate?style=flat-square)](LICENSE)
+
+Local Webdrop is a high-performance, zero-configuration data transmission platform engineered for secure Local Area Network (LAN) operations. It establishes an encrypted bridge between desktop workstations and mobile clients, facilitating high-throughput file transfers, direct media streaming, and bidirectional clipboard synchronization without relying on public cloud infrastructure, external servers, or active WAN connectivity.
 
 ---
 
-## Key Benefits
+## Architectural Highlights
 
-* Complete Privacy: Data never leaves the local subnet; no telemetry, cloud storage, or external relay servers.
-* Memory-Efficient Transfers: Asynchronous chunked transfer mechanism (5 MB chunk size) ensures high throughput with minimal RAM consumption.
-* Instant Device Discovery: Zero-configuration networking via mDNS (Zeroconf), enabling direct resolution at `webdrop.local` alongside dynamic QR code pairing.
-* Live Bi-Directional Synchronization: Low-latency WebSockets provide real-time clipboard updates and multi-device connection state tracking.
-* In-Browser Streaming: Native HTTP byte-range support allows immediate playback of shared audio and video files on mobile clients without requiring full downloads.
-* Direct Relay Mode: Facilitates direct file transfers between separate mobile clients utilizing the host machine as an in-memory relay.
+* Complete Subnet Isolation: Data never transits outside the local broadcast domain. The application eliminates external telemetry, third-party relays, and persistent cloud footprints.
+* End-to-End Transport Security: All HTTP and WebSocket communications are encrypted over TLS (HTTPS/WSS) with localized self-signed certificate support.
+* Tokenized Access Control: Centralized PIN protection utilizes transient session tokens and IP-level rate limiting (automated lockouts after consecutive failed attempts) to prevent automated brute-force attempts.
+* Low-Overhead Chunked Streaming: An asynchronous chunked file processing pipeline (5 MB buffer slices) ensures bounded memory consumption regardless of file payload sizes.
+* Zero-Configuration Discovery: Native multicast DNS (Zeroconf/mDNS) broadcasts domain records for direct resolution at `webdrop.local`, complemented by localized dynamic QR pairing.
+* In-Browser Byte-Range Media Streaming: Built-in HTTP range request parsing enables arbitrary seeking and instantaneous media playback across client browsers without requiring complete asset retrieval.
+* Host Relay Pipeline: Enables transient peer-to-peer file exchanges between isolated mobile endpoints routed through host memory.
+* Internationalization (i18n): Built-in runtime multi-language localization supporting English, Hungarian, German, and Russian across desktop and web interfaces.
 
 ---
 
 ## Multi-Monitor Operation
 
-The desktop interface is built to function reliably in multi-display setups:
+The native desktop controller is specifically architected for multi-display environments and mixed-resolution desktop arrangements:
 
-* Per-Monitor DPI Awareness: Window dimensions, typography, and QR code assets maintain consistent scaling when dragged across displays with mismatched resolutions or scale factors.
-* Boundary-Safe Drag and Drop: The global Drag-and-Drop file staging layer operates across all active monitor coordinates, allowing direct file drops from primary or secondary screens.
-* Window State Persistence: Closing the desktop window minimizes the service directly to the system tray, preserving viewport placement when restored on multi-screen workspaces.
+* Per-Monitor DPI Virtualization: Rendering geometry, modal layers, and dynamically rendered QR vector bitmaps adjust their scale factors when migrating between high-DPI (4K) panels and standard display devices.
+* Unbounded Coordinate Drop Target: The file staging engine abstracts native desktop drag-and-drop events across arbitrary virtual desktop coordinates, enabling direct asset placement from primary or auxiliary monitors.
+* Workspace State Preservation: Window termination requests redirect runtime lifecycles into the background system tray, retaining window layout coordinates and desktop session caches upon restoration.
 
 ---
 
 ## Keyboard Shortcuts
 
-| Shortcut | Context | Action |
+| Key Binding | Target Scope | Operational Action |
 | :--- | :--- | :--- |
-| `Ctrl + V` | Live Clipboard View | Paste system clipboard content directly into the live broadcast queue |
-| `Ctrl + C` | Live Clipboard View | Copy the synchronized remote clipboard content to the local system |
-| `Ctrl + S` | File Staging | Trigger archive packaging (ZIP) for all currently selected files |
-| `Escape` | Web Client Modal | Close the active in-browser video/audio streaming overlay |
-| `Ctrl + Q` | Desktop Application | Terminate the application, unregister mDNS services, and stop the server |
+| `Ctrl + V` | System Interface | Inject system clipboard contents into the real-time broadcast buffer |
+| `Ctrl + C` | Desktop Staging | Mirror synchronized network clipboard data into the OS clipboard registry |
+| `Ctrl + S` | File Buffer | Trigger background compression worker to aggregate files into a single ZIP |
+| `Escape` | Web Application | Terminate active media streaming viewports and detach DOM playback instances |
+| `Ctrl + Q` | Global Context | Flush pending transactions, close active WebSockets, and release host ports |
+
+---
+
+## System Architecture
+
+```text
++-------------------------------------------------------------------------+
+|                              LOCAL NETWORK                              |
+|                                                                         |
+|   +-----------------------+                 +-----------------------+   |
+|   |  Mobile / Web Client  |                 |  Mobile / Web Client  |   |
+|   +-----------+-----------+                 +-----------+-----------+   |
+|               |                                         |               |
+|       WSS / HTTPS (TLS)                         WSS / HTTPS (TLS)       |
+|               |                                         |               |
+|               +--------------------+--------------------+               |
+|                                    |                                    |
+|                                    v                                    |
+|   +-----------------------------------------------------------------+   |
+|   |                       HOST SERVER RUNTIME                       |   |
+|   |                                                                 |   |
+|   |  +--------------------+  Token Auth / Rate Limiting             |   |
+|   |  |   FastAPI Engine   |<--------------------------+             |   |
+|   |  | (Uvicorn / AsyncIO)|                           |             |   |
+|   |  +---------+----------+                           |             |   |
+|   |            |                                      |             |   |
+|   |            v                                      v             |   |
+|   |  +--------------------+                +---------------------+  |   |
+|   |  |  State Repository  |<-------------->| CustomTkinter / DND |  |   |
+|   |  | (In-Memory Buffer) |  Thread-Safe   |  Desktop Workspace  |  |   |
+|   |  +--------------------+                +---------------------+  |   |
+|   +-----------------------------------------------------------------+   |
++-------------------------------------------------------------------------+
+```
 
 ---
 
 ## Tech Stack
 
-* Backend & Networking: Python 3.10+, FastAPI, Uvicorn, WebSockets, Zeroconf
-* Desktop Interface: CustomTkinter, TkinterDnD2, Pystray
-* Web Client: Vanilla JavaScript (ES6+), Tailwind CSS, HTML5 Media APIs
-* System Integration: Psutil, Pillow, Plyer
-
----
-
-## Architecture Overview
-
-```text
-[ Mobile / Web Client ] <==== WebSocket (State/Sync) ====> [ FastAPI Server ]
-                         <==== HTTP Chunked / Stream =====>       ||
-                                                                  \/
-                                                       [ CustomTkinter GUI ]
-```
+* Backend Architecture: Python 3.10+, FastAPI, Uvicorn, AsyncIO, WebSockets
+* Network Discovery & Security: Zeroconf (mDNS), Python SSL/TLS Engine, Dynamic Rate Limiting
+* Desktop Interface: CustomTkinter, TkinterDnD2, Pystray (System Tray Integration)
+* Web Frontend: ECMAScript 6+, Tailwind CSS Engine, HTML5 Media APIs
+* Hardware & Platform Bindings: Psutil, Pillow (PIL), Plyer Notifications
 
 ---
 
@@ -62,45 +93,48 @@ The desktop interface is built to function reliably in multi-display setups:
 ### Prerequisites
 
 * Python 3.10 or higher
-* All target devices connected to the same local network subnet
+* All connecting endpoints joined to the same network subnet (Wi-Fi or Ethernet)
+* Valid local SSL keypair (`webdrop_cert.pem` and `webdrop_key.pem`) in the root directory
 
 ### Installation
 
 1. Clone the repository:
    ```bash
-   git clone [https://github.com/your-username/local-webdrop.git](https://github.com/your-username/local-webdrop.git)
+   git clone [https://github.com/your-username/local-webdrop.git](https://github.com/Gyuri125/local-webdrop.git)
    cd local-webdrop
    ```
 
-2. Configure a virtual environment:
+2. Initialize an isolated virtual environment:
    ```bash
    python -m venv .venv
    
-   # Windows:
-   .venv\Scripts\activate
+   # Windows (PowerShell):
+   .\.venv\Scripts\Activate.ps1
    
    # Linux / macOS:
    source .venv/bin/activate
    ```
 
-3. Install required dependencies:
+3. Install project dependencies:
    ```bash
-   pip install fastapi uvicorn websockets customtkinter qrcode pillow psutil pystray plyer zeroconf tkinterdnd2
+   pip install -r requirements.txt
    ```
 
 ### Execution
 
-Start the desktop controller and embedded web server:
+Initialize the unified server engine and desktop application:
 
 ```bash
 python main.py
 ```
 
-1. Open the generated network address (e.g., `http://192.168.1.X:8080` or `http://webdrop.local:8080`) on any client browser, or scan the QR code displayed on the desktop UI.
-2. Drag and drop files directly onto the desktop interface to expose them to connected clients, or use the web interface to upload files back to the host.
+1. Connect client devices by scanning the generated desktop QR code or directly loading the displayed endpoint (e.g., `https://192.168.X.X:8080` or `https://webdrop.local:8080`).
+2. Accept the self-signed certificate warning on connecting browsers.
+3. If PIN protection is engaged, authenticate the client using the 6-digit dynamic host key.
+4. Drag and drop file payloads onto the desktop interface to publish them, or upload directly from mobile viewports.
 
 ---
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for complete details.
+This software is distributed under the terms of the MIT License. Refer to the [LICENSE](LICENSE) file for complete details.
