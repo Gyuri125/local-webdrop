@@ -3,9 +3,12 @@ import time
 import secrets
 import zipfile
 import asyncio
+import sys
 import psutil
+import shutil
+import tempfile
 from datetime import datetime
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, Form, File, HTTPException, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, Form, File, HTTPException, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,7 +24,22 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "index.html")
+
+def get_template_path() -> str:
+    candidates = [
+        os.path.join(os.path.dirname(__file__), "templates", "index.html"),
+    ]
+    if hasattr(sys, "_MEIPASS"):
+        candidates.append(os.path.join(sys._MEIPASS, "app", "templates", "index.html"))
+        candidates.append(os.path.join(sys._MEIPASS, "templates", "index.html"))
+
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return candidates[0]
+
+
+TEMPLATE_PATH = get_template_path()
 
 
 def is_ip_locked(client_ip: str) -> tuple[bool, int]:
@@ -88,14 +106,26 @@ async def verify_pin(request: Request):
     return JSONResponse({"status": "error", "message": "Invalid PIN"}, status_code=403)
 
 
+def format_file_size(size_bytes: int) -> str:
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
 @app.get("/upload_status")
-async def check_upload_status(filename: str, target: str, token: str = ""):
+async def check_upload_status(filename: str, target: str, sender: str = "Client", token: str = ""):
     if not is_authorized(token):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     clean_name = os.path.basename(filename)
     save_path = state.save_dir if target == "pc" else os.path.join(state.save_dir, "Relay_Temp")
-    act_file = state.active_uploads.get(clean_name, clean_name)
+    upload_key = f"{sender}_{clean_name}"
+    act_file = state.active_uploads.get(upload_key, state.active_uploads.get(clean_name, clean_name))
     target_path = os.path.join(save_path, act_file)
     if os.path.exists(target_path):
         chunks = os.path.getsize(target_path) // (5 * 1024 * 1024)
@@ -126,16 +156,28 @@ async def upload_chunk(
         save_path = os.path.join(state.save_dir, "Relay_Temp") if is_relay else state.save_dir
         os.makedirs(save_path, exist_ok=True)
 
+        upload_key = f"{sender}_{clean_filename}"
+
         if chunk_index == 0:
+            # Check available disk space before accepting payload
+            try:
+                free_space = shutil.disk_usage(save_path).free
+                if free_space < file_size:
+                    raise HTTPException(status_code=507, detail="Insufficient storage on host PC")
+            except HTTPException:
+                raise
+            except Exception:
+                pass
+
             b, ext = os.path.splitext(clean_filename)
             unique_name = clean_filename
             c = 1
             while os.path.exists(os.path.join(save_path, unique_name)):
                 unique_name = f"{b}_{c}{ext}"
                 c += 1
-            state.active_uploads[clean_filename] = unique_name
+            state.active_uploads[upload_key] = unique_name
 
-        act_file = state.active_uploads.get(clean_filename, clean_filename)
+        act_file = state.active_uploads.get(upload_key, clean_filename)
         target_path = os.path.join(save_path, act_file)
 
         with open(target_path, "ab") as f:
@@ -147,7 +189,15 @@ async def upload_chunk(
         if chunk_index == total_chunks - 1:
             if is_relay:
                 state.relay_files[act_file] = target_path
-                payload = [{"filename": act_file, "thumbnail": None, "url": f"/download_relay/{act_file}", "source": sender}]
+                file_sz = os.path.getsize(target_path) if os.path.exists(target_path) else 0
+                payload = [{
+                    "filename": act_file,
+                    "thumbnail": None,
+                    "url": f"/download_relay/{act_file}",
+                    "source": sender,
+                    "size_str": format_file_size(file_sz),
+                    "size_bytes": file_sz
+                }]
                 if state.server_loop:
                     asyncio.run_coroutine_threadsafe(
                         notify_clients({"event": "files_shared", "files": payload, "is_relay": True}, target_name=target),
@@ -181,25 +231,89 @@ async def upload_chunk(
                     show_native_notification("Received", f"File: {act_file}")
                     state.gui_instance.add_to_history("RECEIVED", act_file, fin_path)
 
-            state.active_uploads.pop(clean_filename, None)
+            state.active_uploads.pop(upload_key, None)
 
         return {"status": "success"}
+    except HTTPException:
+        raise
     except Exception as e:
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
 
 @app.get("/download/{file_index}")
-async def download_file(file_index: int, token: str = ""):
+async def download_file(file_index: int, request: Request, token: str = ""):
     if not is_authorized(token):
         return HTMLResponse("Unauthorized - Valid PIN session required", status_code=401)
 
-    if file_index < len(state.shared_files):
+    if 0 <= file_index < len(state.shared_files):
         target_path = state.shared_files[file_index]
         if os.path.exists(target_path):
-            if state.gui_instance:
-                state.gui_instance.add_to_history("SENT/STREAM", os.path.basename(target_path), target_path)
+            range_header = request.headers.get("range", "")
+            if not range_header or range_header.startswith("bytes=0-"):
+                if state.gui_instance:
+                    state.gui_instance.add_to_history("SENT/STREAM", os.path.basename(target_path), target_path)
             return FileResponse(target_path, headers={"Accept-Ranges": "bytes"})
     return JSONResponse({"error": "File not found"}, status_code=404)
+
+
+def cleanup_temp_file(path: str):
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+    except Exception:
+        pass
+
+
+@app.get("/download_all_zip")
+async def download_all_zip(background_tasks: BackgroundTasks, token: str = ""):
+    if not is_authorized(token):
+        return HTMLResponse("Unauthorized - Valid PIN session required", status_code=401)
+
+    if not state.shared_files:
+        return JSONResponse({"error": "No files shared"}, status_code=404)
+
+    existing_files = [p for p in state.shared_files if os.path.exists(p)]
+    if not existing_files:
+        return JSONResponse({"error": "None of the shared files exist on disk"}, status_code=404)
+
+    # If only 1 file and it's already a zip, return it directly
+    if len(existing_files) == 1 and existing_files[0].lower().endswith(".zip"):
+        return FileResponse(existing_files[0], filename=os.path.basename(existing_files[0]))
+
+    temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix=".zip", prefix="webdrop_bundle_")
+    temp_zip_path = temp_zip.name
+    temp_zip.close()
+
+    try:
+        with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            used_arcnames = set()
+            for file_path in existing_files:
+                base_name = os.path.basename(file_path)
+                arcname = base_name
+                counter = 1
+                name_root, ext = os.path.splitext(base_name)
+                while arcname in used_arcnames:
+                    arcname = f"{name_root}_{counter}{ext}"
+                    counter += 1
+                used_arcnames.add(arcname)
+                zf.write(file_path, arcname)
+    except Exception as e:
+        cleanup_temp_file(temp_zip_path)
+        return JSONResponse({"error": f"Failed to create ZIP: {str(e)}"}, status_code=500)
+
+    if state.gui_instance:
+        state.gui_instance.add_to_history("SENT/ZIP", f"All files ({len(existing_files)}) as ZIP", temp_zip_path)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    download_filename = f"Webdrop_{timestamp}.zip"
+    background_tasks.add_task(cleanup_temp_file, temp_zip_path)
+
+    return FileResponse(
+        temp_zip_path,
+        media_type="application/zip",
+        filename=download_filename,
+        headers={"Content-Disposition": f'attachment; filename="{download_filename}"'}
+    )
 
 
 @app.get("/download_relay/{filename}")
@@ -286,7 +400,14 @@ async def websocket_endpoint(websocket: WebSocket):
 async def send_initial_data(websocket: WebSocket):
     if state.shared_files:
         payload = [
-            {"filename": os.path.basename(p), "thumbnail": generate_thumbnail(p), "url": f"/download/{i}", "source": "pc"}
+            {
+                "filename": os.path.basename(p),
+                "thumbnail": generate_thumbnail(p),
+                "url": f"/download/{i}",
+                "source": "pc",
+                "size_str": format_file_size(os.path.getsize(p)) if os.path.exists(p) else "0 B",
+                "size_bytes": os.path.getsize(p) if os.path.exists(p) else 0
+            }
             for i, p in enumerate(state.shared_files)
         ]
         await websocket.send_json({"event": "files_shared", "files": payload, "is_relay": False})
@@ -319,9 +440,16 @@ async def notify_clients(event_data, exclude=None, target_name=None):
 async def broadcast_stats():
     while True:
         if state.connected_clients:
+            free_gb = None
+            try:
+                disk = psutil.disk_usage(state.save_dir)
+                free_gb = round(disk.free / (1024 ** 3), 1)
+            except Exception:
+                pass
             await notify_clients({
                 "event": "server_stats",
                 "cpu": psutil.cpu_percent(),
-                "ram": psutil.virtual_memory().percent
+                "ram": psutil.virtual_memory().percent,
+                "disk_free_gb": free_gb
             })
         await asyncio.sleep(2)

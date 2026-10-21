@@ -10,3 +10,4 @@ pystray>=0.19.5
 plyer>=2.1.0
 zeroconf>=0.131.0
 tkinterdnd2>=0.3.0
+cryptography>=42.0.0

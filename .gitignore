@@ -1,38 +1,67 @@
-# Virtual Environment
+# ==============================================================================
+# Local Webdrop - Git Ignore
+# ==============================================================================
+
+# Python Virtual Environments
 .venv/
 venv/
 ENV/
-
-# PyInstaller Build & Dist output
-build/
-dist/
-
-# Sensitive Certificates & Private Keys
-*.pem
-*.key
-*.crt
+env/
+env.bak/
+venv.bak/
 
 # Byte-compiled / optimized / cache files
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# IDE & Editor files (PyCharm, VS Code)
+# Packaging & PyInstaller Build Outputs
+build/
+dist/
+*.egg-info/
+*.egg
+*.spec
+!main.spec
+
+# Sensitive Certificates, Private Keys & Tokens (Generated automatically at runtime)
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+
+# IDEs & Text Editors
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+*.sublime-project
+*.sublime-workspace
 
-# Operating System specific
+# Operating System Specific
 .DS_Store
 Thumbs.db
 desktop.ini
+ehthumbs.db
+*.dmp
 
-# App runtime outputs / Local downloads
+# App Runtime Outputs & Received Transfers
 Webdrop_Received/
 Relay_Temp/
+Drop_*/
 webdrop_package.zip
 *.log
+*_tisztitott.txt
 
+# Local backup / legacy development folders
 régi kódok/
-*.spec

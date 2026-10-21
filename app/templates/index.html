@@ -32,6 +32,9 @@
         <audio id="audioPlayer" controls class="w-full max-w-md hidden shadow-lg"></audio>
     </div>
 
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 z-[300] bg-emerald-600 text-white font-medium text-xs px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 opacity-0 pointer-events-none translate-y-3"></div>
+
     <div class="w-full max-w-md bg-slate-800 rounded-2xl shadow-xl border border-slate-700 overflow-hidden mb-8 mt-4">
         <div class="bg-slate-900 px-6 py-4 border-b border-slate-700 flex justify-between items-center">
             <div>
@@ -63,8 +66,15 @@
                 </div>
                 <button id="uploadBtn" onclick="startChunkedUpload()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg hidden transition">Start Upload</button>
                 <div id="progressContainer" class="hidden space-y-2 mt-3">
-                    <div class="flex justify-between text-xs text-slate-400 font-mono"><span id="progressFileText">Uploading...</span></div>
+                    <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                        <span id="progressFileText">Uploading...</span>
+                        <button type="button" onclick="cancelUpload()" class="text-rose-400 hover:text-rose-300 font-bold ml-2 underline cursor-pointer">Cancel</button>
+                    </div>
                     <div class="w-full bg-slate-700 rounded-full h-3"><div id="progressBar" class="bg-sky-500 h-3 rounded-full transition-all" style="width: 0%"></div></div>
+                    <div class="flex justify-between items-center text-[11px] font-mono text-slate-400 pt-0.5">
+                        <span id="speedText" class="text-emerald-400 font-semibold">0.0 MB/s</span>
+                        <span id="etaText" class="text-sky-400">ETA: --</span>
+                    </div>
                 </div>
             </div>
 
@@ -77,7 +87,12 @@
             </div>
 
             <div class="bg-slate-900 p-4 rounded-xl border border-slate-700 space-y-3 shadow-inner">
-                <h2 id="txtRecTitle" class="text-sm font-semibold text-slate-300 uppercase text-left">Network Shares</h2>
+                <div class="flex justify-between items-center">
+                    <h2 id="txtRecTitle" class="text-sm font-semibold text-slate-300 uppercase text-left">Network Shares</h2>
+                    <button id="btnDownloadAll" onclick="downloadAllZip()" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-1 px-2.5 rounded-lg transition shadow flex items-center gap-1.5 cursor-pointer">
+                        <span>📦</span> <span id="txtDownloadAll">Download All (ZIP)</span>
+                    </button>
+                </div>
                 <div id="noFileState" class="text-sm text-slate-500 text-center py-2">No active shares.</div>
                 <div id="downloadListContainer" class="hidden flex flex-col gap-3 mt-2"></div>
             </div>
@@ -106,7 +121,9 @@
                 pin_desc: "Enter the 6-digit security PIN shown on the host computer to access this server.",
                 btn_auth: "Authenticate",
                 invalid_pin: "Invalid PIN code.",
-                locked_msg: "Too many failed attempts. Locked for {time}s."
+                locked_msg: "Too many failed attempts. Locked for {time}s.",
+                download_all: "Download All (ZIP)",
+                eta: "ETA: {time}"
             },
             hu: {
                 connecting: "Kapcsolódás...",
@@ -128,7 +145,9 @@
                 pin_desc: "Add meg a fogadó gépen látható 6 jegyű PIN kódot a hozzáféréshez.",
                 btn_auth: "Hitelesítés",
                 invalid_pin: "Hibás PIN kód.",
-                locked_msg: "Túl sok hibás próbálkozás. Zárolva: {time} mp."
+                locked_msg: "Túl sok hibás próbálkozás. Zárolva: {time} mp.",
+                download_all: "Összes Letöltése (ZIP)",
+                eta: "Hátralévő: {time}"
             },
             de: {
                 connecting: "Verbindung...",
@@ -150,7 +169,9 @@
                 pin_desc: "Geben Sie die 6-stellige PIN des Hosts ein, um Zugriff zu erhalten.",
                 btn_auth: "Authentifizieren",
                 invalid_pin: "Ungültiger PIN-Code.",
-                locked_msg: "Zu viele Versuche. Gesperrt für {time}s."
+                locked_msg: "Zu viele Versuche. Gesperrt für {time}s.",
+                download_all: "Alle herunterladen (ZIP)",
+                eta: "Restzeit: {time}"
             },
             ru: {
                 connecting: "Подключение...",
@@ -172,7 +193,9 @@
                 pin_desc: "Введите 6-значный PIN-код с экрана компьютера для входа.",
                 btn_auth: "Авторизоваться",
                 invalid_pin: "Неверный PIN-код.",
-                locked_msg: "Слишком много попыток. Блокировка: {time} сек."
+                locked_msg: "Слишком много попыток. Блокировка: {time} сек.",
+                download_all: "Скачать все (ZIP)",
+                eta: "Осталось: {time}"
             }
         };
 
@@ -180,7 +203,7 @@
         let authToken = sessionStorage.getItem('webdrop_token') || '';
 
         const UI = {};
-        ['dropZone', 'fileInput', 'uploadBtn', 'dropZoneText', 'progressContainer', 'progressBar', 'progressFileText', 'clipboard', 'serverLoadText', 'noFileState', 'downloadListContainer', 'uploadMode', 'deviceNameBadge', 'mediaModal', 'mediaPlayer', 'audioPlayer', 'pinModal', 'pinInput', 'pinErrorText', 'langSelect', 'txtSendTitle', 'optPcTarget', 'txtClipTitle', 'btnCopyClip', 'txtRecTitle', 'pinModalTitle', 'pinModalDesc', 'btnSubmitPin'].forEach(id => UI[id] = document.getElementById(id));
+        ['dropZone', 'fileInput', 'uploadBtn', 'dropZoneText', 'progressContainer', 'progressBar', 'progressFileText', 'speedText', 'etaText', 'clipboard', 'serverLoadText', 'noFileState', 'downloadListContainer', 'btnDownloadAll', 'txtDownloadAll', 'uploadMode', 'deviceNameBadge', 'mediaModal', 'mediaPlayer', 'audioPlayer', 'pinModal', 'pinInput', 'pinErrorText', 'langSelect', 'txtSendTitle', 'optPcTarget', 'txtClipTitle', 'btnCopyClip', 'txtRecTitle', 'pinModalTitle', 'pinModalDesc', 'btnSubmitPin'].forEach(id => UI[id] = document.getElementById(id));
 
         UI.langSelect.value = currentLang;
 
@@ -207,6 +230,7 @@
             UI.txtClipTitle.innerText = tr('clip_title');
             UI.btnCopyClip.innerText = tr('copy_text');
             UI.txtRecTitle.innerText = tr('rec_title');
+            UI.txtDownloadAll.innerText = tr('download_all');
             UI.noFileState.innerText = tr('no_shares');
             UI.pinModalTitle.innerText = tr('pin_required');
             UI.pinModalDesc.innerText = tr('pin_desc');
@@ -220,15 +244,58 @@
         const myName = `${baseName}-${Math.floor(1000 + Math.random() * 9000)}`;
         UI.deviceNameBadge.innerText = myName;
 
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => {
-            UI.dropZone.addEventListener(eName, e => { e.preventDefault(); e.stopPropagation(); });
-            document.body.addEventListener(eName, e => { e.preventDefault(); e.stopPropagation(); });
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.className = `fixed bottom-6 z-[300] ${isError ? 'bg-rose-600' : 'bg-emerald-600'} text-white font-medium text-xs px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 opacity-100 translate-y-0`;
+            clearTimeout(window._toastTimer);
+            window._toastTimer = setTimeout(() => {
+                toast.className = `fixed bottom-6 z-[300] ${isError ? 'bg-rose-600' : 'bg-emerald-600'} text-white font-medium text-xs px-4 py-2.5 rounded-xl shadow-2xl transition-all duration-300 opacity-0 pointer-events-none translate-y-3`;
+            }, 2500);
+        }
+
+        ['dragenter', 'dragover'].forEach(eName => {
+            UI.dropZone.addEventListener(eName, e => {
+                e.preventDefault(); e.stopPropagation();
+                UI.dropZone.classList.add('dragover');
+            });
         });
+        ['dragleave', 'drop'].forEach(eName => {
+            UI.dropZone.addEventListener(eName, e => {
+                e.preventDefault(); e.stopPropagation();
+                UI.dropZone.classList.remove('dragover');
+            });
+        });
+        document.body.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); });
+        document.body.addEventListener('drop', e => { e.preventDefault(); e.stopPropagation(); });
+
         UI.dropZone.addEventListener('drop', e => {
-            if(e.dataTransfer.files.length) { UI.fileInput.files = e.dataTransfer.files; handleFile(); }
+            if(e.dataTransfer && e.dataTransfer.files.length) {
+                UI.fileInput.files = e.dataTransfer.files;
+                handleFile();
+            }
         });
         UI.dropZone.addEventListener('click', () => UI.fileInput.click());
         UI.fileInput.addEventListener('change', handleFile);
+
+        window.addEventListener('paste', e => {
+            const items = (e.clipboardData || window.clipboardData)?.items;
+            if(!items) return;
+            const pastedFiles = [];
+            for(let i = 0; i < items.length; i++) {
+                if(items[i].kind === 'file') {
+                    const f = items[i].getAsFile();
+                    if(f) pastedFiles.push(f);
+                }
+            }
+            if(pastedFiles.length > 0) {
+                const dt = new DataTransfer();
+                pastedFiles.forEach(f => dt.items.add(f));
+                UI.fileInput.files = dt.files;
+                handleFile();
+                showToast(`Pasted ${pastedFiles.length} item(s) from clipboard`);
+            }
+        });
 
         function handleFile() {
             if(UI.fileInput.files.length > 0) {
@@ -240,11 +307,11 @@
         async function copyToClip() {
             try {
                 await navigator.clipboard.writeText(UI.clipboard.value);
-                alert(tr('copied'));
+                showToast(tr('copied'));
             } catch (err) {
                 UI.clipboard.select();
                 document.execCommand("copy");
-                alert(tr('copied'));
+                showToast(tr('copied'));
             }
         }
 
@@ -317,21 +384,41 @@
             playMedia(`${url}?token=${encodeURIComponent(authToken)}`, type);
         }
 
+        let uploadCancelled = false;
+        function cancelUpload() {
+            uploadCancelled = true;
+            showToast("Upload cancelled.", true);
+        }
+
+        function downloadAllZip() {
+            window.location.href = `/download_all_zip?token=${encodeURIComponent(authToken)}`;
+            showToast("Preparing ZIP download...");
+        }
+
         async function startChunkedUpload() {
             const files = UI.fileInput.files;
             if(!files.length) return;
+            uploadCancelled = false;
             const target = UI.uploadMode.value;
             UI.uploadBtn.classList.add('hidden');
             UI.progressContainer.classList.remove('hidden');
             UI.dropZone.style.pointerEvents = 'none';
 
+            const grandTotalBytes = Array.from(files).reduce((acc, f) => acc + f.size, 0);
+            let totalBytesSent = 0;
+            let smoothedSpeed = 0;
+
+            UI.speedText.innerText = "0.0 MB/s";
+            UI.etaText.innerText = tr('eta', { time: '--' });
+
             for(let f = 0; f < files.length; f++) {
+                if(uploadCancelled) break;
                 const file = files[f];
                 const CHUNK_SIZE = 5 * 1024 * 1024;
                 const total = Math.ceil(file.size / CHUNK_SIZE);
                 let startChunk = 0;
                 try {
-                    const statRes = await fetch(`/upload_status?filename=${encodeURIComponent(file.name)}&target=${target}&token=${encodeURIComponent(authToken)}`);
+                    const statRes = await fetch(`/upload_status?filename=${encodeURIComponent(file.name)}&target=${target}&sender=${encodeURIComponent(myName)}&token=${encodeURIComponent(authToken)}`);
                     if(statRes.status === 401) {
                         UI.pinModal.classList.remove('hidden');
                         break;
@@ -340,9 +427,13 @@
                     startChunk = statData.received_chunks || 0;
                 } catch(e) {}
 
+                totalBytesSent += startChunk * CHUNK_SIZE;
+
                 for(let i = startChunk; i < total; i++) {
+                    if(uploadCancelled) break;
                     const start = i * CHUNK_SIZE;
                     const end = Math.min(file.size, start + CHUNK_SIZE);
+                    const chunkLen = end - start;
                     const fd = new FormData();
                     fd.append("file", file.slice(start, end));
                     fd.append("filename", file.name);
@@ -353,13 +444,63 @@
                     fd.append("sender", myName);
                     fd.append("token", authToken);
 
-                    try {
-                        const postRes = await fetch('/upload', { method: 'POST', body: fd });
-                        if(postRes.status === 401) {
-                            UI.pinModal.classList.remove('hidden');
-                            return;
+                    const chunkStartTime = Date.now();
+                    let success = false;
+                    let retries = 3;
+                    while(retries > 0 && !success && !uploadCancelled) {
+                        try {
+                            const postRes = await fetch('/upload', { method: 'POST', body: fd });
+                            if(postRes.status === 401) {
+                                UI.pinModal.classList.remove('hidden');
+                                return;
+                            }
+                            if(postRes.status === 507) {
+                                showToast("Host PC storage full!", true);
+                                uploadCancelled = true;
+                                break;
+                            }
+                            if(postRes.ok) {
+                                success = true;
+                            } else {
+                                retries--;
+                                if(retries > 0) await new Promise(r => setTimeout(r, 600));
+                            }
+                        } catch(e) {
+                            retries--;
+                            if(retries > 0) await new Promise(r => setTimeout(r, 600));
                         }
-                    } catch(e) {}
+                    }
+
+                    if(!success && !uploadCancelled) {
+                        showToast(`Failed uploading chunk ${i + 1}/${total}`, true);
+                        break;
+                    }
+
+                    totalBytesSent += chunkLen;
+                    const chunkDurationSec = Math.max((Date.now() - chunkStartTime) / 1000, 0.05);
+                    const instantSpeed = chunkLen / chunkDurationSec;
+                    smoothedSpeed = smoothedSpeed ? (0.65 * smoothedSpeed + 0.35 * instantSpeed) : instantSpeed;
+
+                    let speedDisplay = "0 KB/s";
+                    if(smoothedSpeed >= 1024 * 1024) {
+                        speedDisplay = `${(smoothedSpeed / (1024 * 1024)).toFixed(1)} MB/s`;
+                    } else {
+                        speedDisplay = `${Math.round(smoothedSpeed / 1024)} KB/s`;
+                    }
+                    UI.speedText.innerText = `🚀 ${speedDisplay}`;
+
+                    const remainingBytes = Math.max(grandTotalBytes - totalBytesSent, 0);
+                    const etaSeconds = smoothedSpeed > 0 ? Math.ceil(remainingBytes / smoothedSpeed) : 0;
+                    let etaDisplay = "--";
+                    if(etaSeconds < 60) {
+                        etaDisplay = `${etaSeconds}s`;
+                    } else if(etaSeconds < 3600) {
+                        etaDisplay = `${Math.floor(etaSeconds / 60)}m ${etaSeconds % 60}s`;
+                    } else {
+                        etaDisplay = `${Math.floor(etaSeconds / 3600)}h ${Math.floor((etaSeconds % 3600) / 60)}m`;
+                    }
+                    UI.etaText.innerText = tr('eta', { time: etaDisplay });
+
                     const percent = Math.round((end / file.size) * 100);
                     UI.progressBar.style.width = percent + '%';
                     UI.progressFileText.innerText = tr('uploading', { current: f + 1, total: files.length, percent: percent });
@@ -369,6 +510,9 @@
             UI.fileInput.value = '';
             UI.dropZoneText.innerHTML = tr('drop_hint');
             UI.dropZone.style.pointerEvents = 'auto';
+            if(!uploadCancelled && files.length > 0) {
+                showToast("Upload completed successfully!");
+            }
         }
 
         let ws;
@@ -403,7 +547,14 @@
                 else if(d.event === 'files_shared') {
                     UI.noFileState.classList.add('hidden');
                     UI.downloadListContainer.classList.remove('hidden');
-                    if(!d.is_relay) UI.downloadListContainer.innerHTML = '';
+                    if(!d.is_relay) {
+                        UI.downloadListContainer.innerHTML = '';
+                        if(d.files && d.files.length > 1) {
+                            UI.btnDownloadAll.classList.remove('hidden');
+                        } else {
+                            UI.btnDownloadAll.classList.add('hidden');
+                        }
+                    }
 
                     d.files.forEach((file) => {
                         const cardId = 'card_' + Math.random().toString(36).substring(2, 9);
@@ -426,6 +577,7 @@
                             ${badge}${mC}
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm font-medium text-emerald-400 truncate">${file.filename}</p>
+                                ${file.size_str ? `<p class="text-[11px] text-slate-400 font-mono mt-0.5">${file.size_str}</p>` : ''}
                             </div>
                             <div class="flex flex-col gap-1">
                                 ${streamBtn}
@@ -441,12 +593,14 @@
                     UI.noFileState.classList.remove('hidden');
                     UI.downloadListContainer.classList.add('hidden');
                     UI.downloadListContainer.innerHTML = '';
+                    UI.btnDownloadAll.classList.add('hidden');
                 }
                 else if(d.event === 'clipboard' && UI.clipboard.value !== d.text) {
                     UI.clipboard.value = d.text;
                 }
                 else if(d.event === 'server_stats') {
-                    UI.serverLoadText.innerText = `CPU: ${d.cpu}% | RAM: ${d.ram}%`;
+                    const freeText = (d.disk_free_gb !== undefined && d.disk_free_gb !== null) ? ` | Free: ${d.disk_free_gb} GB` : '';
+                    UI.serverLoadText.innerText = `CPU: ${d.cpu}% | RAM: ${d.ram}%${freeText}`;
                 }
             };
 

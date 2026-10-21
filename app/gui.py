@@ -321,8 +321,24 @@ class WebdropGUI(BaseWindow):
             self._notify_file_update()
 
     def _notify_file_update(self):
+        def format_size(s):
+            if s < 1024:
+                return f"{s} B"
+            elif s < 1024 * 1024:
+                return f"{s / 1024:.1f} KB"
+            elif s < 1024 * 1024 * 1024:
+                return f"{s / (1024 * 1024):.1f} MB"
+            return f"{s / (1024 * 1024 * 1024):.2f} GB"
+
         payload = [
-            {"filename": os.path.basename(p), "thumbnail": generate_thumbnail(p), "url": f"/download/{i}", "source": "pc"}
+            {
+                "filename": os.path.basename(p),
+                "thumbnail": generate_thumbnail(p),
+                "url": f"/download/{i}",
+                "source": "pc",
+                "size_str": format_size(os.path.getsize(p)) if os.path.exists(p) else "0 B",
+                "size_bytes": os.path.getsize(p) if os.path.exists(p) else 0
+            }
             for i, p in enumerate(state.shared_files)
         ]
         if state.server_loop:

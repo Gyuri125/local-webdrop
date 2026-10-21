@@ -4,7 +4,7 @@ import uvicorn
 from tkinter import messagebox
 
 from app.state import state
-from app.utils import get_ip, setup_zeroconf
+from app.utils import get_ip, setup_zeroconf, ensure_ssl_certificates
 from app.server import app, broadcast_stats
 from app.gui import WebdropGUI
 
@@ -27,13 +27,14 @@ def run_fastapi():
 
     state.server_loop.create_task(broadcast_stats())
 
+    cert_path, key_path = ensure_ssl_certificates()
     config = uvicorn.Config(
         app,
         host="0.0.0.0",
         port=8080,
         log_level="warning",
-        ssl_keyfile="webdrop_key.pem",
-        ssl_certfile="webdrop_cert.pem"
+        ssl_keyfile=key_path,
+        ssl_certfile=cert_path
     )
     server = uvicorn.Server(config)
     state.server_loop.run_until_complete(server.serve())
@@ -44,6 +45,9 @@ if __name__ == "__main__":
     if ip == '127.0.0.1':
         messagebox.showerror("Hálózati hiba", "Nem található aktív hálózati kapcsolat!")
         exit(1)
+
+    # Automatikus önaláírt tanúsítvány generálás, ha még nem létezne
+    ensure_ssl_certificates(ip=ip)
 
     zc = setup_zeroconf(ip, 8080)
     server_thread = threading.Thread(target=run_fastapi, daemon=True)

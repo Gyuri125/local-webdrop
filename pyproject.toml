@@ -1,5 +1,60 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "local-webdrop"
-version = "0.1.0"
-requires-python = ">=3.14"
-dependencies = []
+version = "1.0.0"
+description = "Secure, high-performance local network file sharing and clipboard synchronization platform"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Gyuri125" }
+]
+keywords = [
+    "file-transfer",
+    "lan-sharing",
+    "airdrop-alternative",
+    "fastapi",
+    "customtkinter",
+    "clipboard-sync",
+    "zeroconf",
+    "local-network"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: File Sharing",
+]
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.28.0",
+    "python-multipart>=0.0.9",
+    "websockets>=12.0",
+    "psutil>=5.9.8",
+    "customtkinter>=5.2.2",
+    "qrcode>=7.4.2",
+    "pillow>=10.2.0",
+    "pystray>=0.19.5",
+    "plyer>=2.1.0",
+    "zeroconf>=0.131.0",
+    "tkinterdnd2>=0.3.0",
+    "cryptography>=42.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Gyuri125/local-webdrop"
+Repository = "https://github.com/Gyuri125/local-webdrop.git"
+"Bug Tracker" = "https://github.com/Gyuri125/local-webdrop/issues"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
